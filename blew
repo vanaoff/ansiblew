@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+
+import logging
+import os
+import shutil
+import sys
+import tarfile
+from os import path as osp
+from pathlib import Path
+from urllib.request import urlretrieve
+
+logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', stream=sys.stdout, level=logging.DEBUG)
+logger = logging.getLogger()
+
+AP_VERSION = 'v0.3.0'
+URL_TEMPLATE = 'https://github.com/ownport/portable-ansible/releases/download/%(version)s/portable-ansible-%(version)s-py3.tar.bz2'
+
+url = URL_TEMPLATE % {'version': AP_VERSION}
+
+ANSIBLE_ROOT = '.ansible'
+ANSIBLE_LIB = osp.join(ANSIBLE_ROOT, 'lib')
+
+SCRIPT_TEMPLATE = """\
+#!/usr/bin/env bash
+cd $(dirname $0)
+python exec/%(runner)s
+"""
+
+
+def prepare_dir(path, reset=False):
+    if reset and osp.exists(path):
+        shutil.rmtree(path)
+    logger.debug("Preparing dir %s.", path)
+    Path(path).mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def safe_remove_dir(dir):
+    if osp.exists(dir):
+        logger.debug('Removing %s.', dir)
+        shutil.rmtree(dir)
+    else:
+        logger.debug('%s does not exist.', dir)
+
+
+def prepare(force=False):
+    if force:
+        safe_remove_dir(ANSIBLE_ROOT)
+
+    if not osp.exists(ANSIBLE_ROOT):
+        logger.debug('Downloading Portable Ansible version %s from %s.', AP_VERSION, url)
+        with tarfile.open(urlretrieve(url, filename=None)[0]) as tar:
+            logger.debug('Extracting Portable Ansible.')
+            tar.extractall(ANSIBLE_ROOT)
+            os.rename(osp.join(ANSIBLE_ROOT, 'ansible'), ANSIBLE_LIB)
+        exec_dir = prepare_dir(osp.join(ANSIBLE_ROOT, 'exec'))
+        for runner in ['ansible-playbook',
+                       'ansible-galaxy']:
+            os.symlink('../lib', osp.join(exec_dir, runner), True)
+            script = osp.join(ANSIBLE_ROOT, runner)
+            with open(script, 'w') as w:
+                w.write(SCRIPT_TEMPLATE % {'runner': runner})
+            os.chmod(script, 0o755)
+
+
+if __name__ == '__main__':
+    prepare(force=True)
