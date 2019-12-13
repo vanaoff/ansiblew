@@ -9,13 +9,10 @@ from argparse import ArgumentParser
 from os import path as osp
 from subprocess import run
 
-## user-config
-log_level = 'INFO'
-ap_version = 'v0.4.1'
-working_dir = '.'
-## ---
+LOG_LEVEL = 'INFO'
+AP_VERSION = 'v0.4.1'
 
-logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', stream=sys.stdout, level=log_level)
+logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', stream=sys.stdout, level=LOG_LEVEL)
 logger = logging.getLogger()
 
 python_version = sys.version_info[0]
@@ -24,15 +21,17 @@ if python_version != 3:
 
 URL_TEMPLATE = 'https://github.com/ownport/portable-ansible/releases/download/%(version)s/portable-ansible-%(version)s-py3.tar.bz2'
 
-ANSIBLE_ROOT = '.ansible'
-ANSIBLE_LIB = osp.join(ANSIBLE_ROOT, 'lib')
-ANSIBLE_EXEC = osp.join(ANSIBLE_ROOT, 'exec')
-ANSIBLE_BIN = osp.join(ANSIBLE_ROOT, 'bin')
+
+SCRIPT_DIR = osp.dirname(osp.realpath(sys.argv[0]))
+BASE_DIR = osp.join(SCRIPT_DIR, '.blew')
+
+ANSIBLE = osp.join(BASE_DIR, 'ansible')
+EXEC = osp.join(BASE_DIR, 'exec')
+BIN = osp.join(BASE_DIR, 'bin')
 
 SCRIPT_TEMPLATE = """\
 #!/usr/bin/env bash
-cd $(dirname $0)/..
-python exec/%(command)s $@
+python3 $(dirname $0)/../exec/%(command)s $@
 """
 
 COMMANDS = (
@@ -87,24 +86,24 @@ def safe_remove_dir(dir):
         logger.debug('%s does not exist.', dir)
 
 
-def prepare(version, clean):
+def prepare(base_dir, version, clean):
     if clean:
-        safe_remove_dir(ANSIBLE_ROOT)
-    if not osp.exists(ANSIBLE_ROOT):
+        safe_remove_dir(base_dir)
+    if not osp.exists(base_dir):
         from urllib.request import urlretrieve
         url = URL_TEMPLATE % {'version': version}
         logger.info('Downloading Portable Ansible version %s from %s.', version, url)
         with tarfile.open(urlretrieve(url, filename=None)[0]) as tar:
-            logger.info('Extracting Portable Ansible to %s.', ANSIBLE_ROOT)
-            tar.extractall(ANSIBLE_ROOT)
-            os.rename(osp.join(ANSIBLE_ROOT, 'ansible'), ANSIBLE_LIB)
-        prepare_dir(ANSIBLE_EXEC)
-        prepare_dir(ANSIBLE_BIN)
+            logger.info('Extracting Portable Ansible to %s.', base_dir)
+            tar.extractall(base_dir)
+            os.rename(osp.join(base_dir, 'ansible'), ANSIBLE)
+        prepare_dir(EXEC)
+        prepare_dir(BIN)
         for command in COMMANDS:
-            os.symlink('../lib', osp.join(ANSIBLE_EXEC, command), True)
-            script = osp.join(ANSIBLE_BIN, command)
+            os.symlink('../ansible', osp.join(EXEC, command), True)
+            script = osp.join(BIN, command)
             with open(script, 'w') as w:
-                w.write(SCRIPT_TEMPLATE % {'command': command})
+                w.write(SCRIPT_TEMPLATE % {'command': command, 'ansible_exec': EXEC})
             os.chmod(script, 0o755)
 
 
@@ -122,13 +121,12 @@ for command in COMMANDS:
         subparser.set_defaults(command=command)
 
 if __name__ == '__main__':
-    os.chdir(osp.dirname(sys.argv[0]))
     args, extra_args = parser.parse_known_args()
     if args.blew_help:
         parser.print_help()
         sys.exit(0)
-    if not osp.exists(ANSIBLE_ROOT) or args.command == 'reset':
-        prepare(version=ap_version, clean=True)
+    if not osp.exists(BASE_DIR) or args.command == 'reset':
+        prepare(BASE_DIR, version=AP_VERSION, clean=True)
     if args.command in COMMANDS:
-        process = run([osp.join(ANSIBLE_BIN, args.command)] + extra_args, cwd=working_dir)
+        process = run([osp.join(BIN, args.command)] + extra_args)
         sys.exit(process.returncode)
