@@ -102,18 +102,19 @@ def get_parser():
     parser.add_argument('--blew-help', action='store_true')
     parser.set_defaults(command='ansible')
     subparsers = parser.add_subparsers()
-    parser_reset = subparsers.add_parser('reset')
-    parser_reset.set_defaults(command='reset')
     for command in COMMANDS:
         if command.startswith('ansible-'):
             subparser = subparsers.add_parser(command[8:], add_help=False)
             subparser.set_defaults(command=command)
+    parser_reset = subparsers.add_parser('reset', description="Initialize or re-initialize .blew directory.")
+    parser_reset.set_defaults(command='reset')
     return parser
 
 
 if __name__ == '__main__':
     parser = get_parser()
     args, extra_args = parser.parse_known_args()
+    logger.setLevel(args.log_level.upper())
     if args.blew_help:
         parser.print_help()
         sys.exit(0)
