@@ -7,27 +7,25 @@ import sys
 import tarfile
 from argparse import ArgumentParser
 from os import path as osp
-from subprocess import run
+
+py_version = sys.version_info[0]
+if py_version != 3:
+    print("Python %s is not supported." % py_version)
+    sys.exit(1)
 
 LOG_LEVEL = 'INFO'
-AP_VERSION = 'v0.4.1'
+ANSIBLE_PORTABLE_VERSION = 'v0.4.1'
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', stream=sys.stdout, level=LOG_LEVEL)
 logger = logging.getLogger()
 
-python_version = sys.version_info[0]
-if python_version != 3:
-    logger.error("Python %s is not supported.", python_version)
-
 URL_TEMPLATE = 'https://github.com/ownport/portable-ansible/releases/download/%(version)s/portable-ansible-%(version)s-py3.tar.bz2'
-
 
 SCRIPT_DIR = osp.dirname(osp.realpath(sys.argv[0]))
 BASE_DIR = osp.join(SCRIPT_DIR, '.blew')
-
-ANSIBLE = osp.join(BASE_DIR, 'ansible')
-EXEC = osp.join(BASE_DIR, 'exec')
-BIN = osp.join(BASE_DIR, 'bin')
+ANSIBLE_DIR = osp.join(BASE_DIR, 'ansible')
+EXEC_DIR = osp.join(BASE_DIR, 'exec')
+BIN_DIR = osp.join(BASE_DIR, 'bin')
 
 SCRIPT_TEMPLATE = """\
 #!/usr/bin/env bash
@@ -63,12 +61,6 @@ def update_rec(default, custom, path=()):
     return merged
 
 
-def custom_config_load(file):
-    with open(file) as o:
-        import yaml
-        return yaml.safe_load(o)
-
-
 def prepare_dir(path, reset=False):
     if reset and osp.exists(path):
         shutil.rmtree(path)
@@ -86,47 +78,49 @@ def safe_remove_dir(dir):
         logger.debug('%s does not exist.', dir)
 
 
-def prepare(base_dir, version, clean):
-    if clean:
-        safe_remove_dir(base_dir)
-    if not osp.exists(base_dir):
-        from urllib.request import urlretrieve
-        url = URL_TEMPLATE % {'version': version}
-        logger.info('Downloading Portable Ansible version %s from %s.', version, url)
-        with tarfile.open(urlretrieve(url, filename=None)[0]) as tar:
-            logger.info('Extracting Portable Ansible to %s.', base_dir)
-            tar.extractall(base_dir)
-            os.rename(osp.join(base_dir, 'ansible'), ANSIBLE)
-        prepare_dir(EXEC)
-        prepare_dir(BIN)
-        for command in COMMANDS:
-            os.symlink('../ansible', osp.join(EXEC, command), True)
-            script = osp.join(BIN, command)
-            with open(script, 'w') as w:
-                w.write(SCRIPT_TEMPLATE % {'command': command, 'ansible_exec': EXEC})
-            os.chmod(script, 0o755)
+def build(ansible_portable_version):
+    from urllib.request import urlretrieve
+    safe_remove_dir(BASE_DIR)
+    url = URL_TEMPLATE % {'version': ansible_portable_version}
+    logger.info('Downloading %s.', url)
+    with tarfile.open(urlretrieve(url, filename=None)[0]) as tar:
+        logger.info('Extracting portable-ansible version %s to %s.', ansible_portable_version, BASE_DIR)
+        tar.extractall(BASE_DIR)
+    prepare_dir(EXEC_DIR)
+    prepare_dir(BIN_DIR)
+    for command in COMMANDS:
+        os.symlink('../ansible', osp.join(EXEC_DIR, command), True)
+        script = osp.join(BIN_DIR, command)
+        with open(script, 'w') as w:
+            w.write(SCRIPT_TEMPLATE % {'command': command, 'ansible_exec': EXEC_DIR})
+        os.chmod(script, 0o755)
 
 
-parser = ArgumentParser(osp.basename(sys.argv[0]), add_help=False)
-parser.add_argument('--log-level', default='INFO')
-parser.add_argument('--blew-help', action='store_true')
-parser.set_defaults(command='ansible')
+def get_parser():
+    parser = ArgumentParser(osp.basename(sys.argv[0]), add_help=False)
+    parser.add_argument('--log-level', default='INFO')
+    parser.add_argument('--blew-help', action='store_true')
+    parser.set_defaults(command='ansible')
+    subparsers = parser.add_subparsers()
+    parser_reset = subparsers.add_parser('reset')
+    parser_reset.set_defaults(command='reset')
+    for command in COMMANDS:
+        if command.startswith('ansible-'):
+            subparser = subparsers.add_parser(command[8:], add_help=False)
+            subparser.set_defaults(command=command)
+    return parser
 
-subparsers = parser.add_subparsers()
-parser_reset = subparsers.add_parser('reset')
-parser_reset.set_defaults(command='reset')
-for command in COMMANDS:
-    if command.startswith('ansible-'):
-        subparser = subparsers.add_parser(command[8:], add_help=False)
-        subparser.set_defaults(command=command)
 
 if __name__ == '__main__':
+    parser = get_parser()
     args, extra_args = parser.parse_known_args()
     if args.blew_help:
         parser.print_help()
         sys.exit(0)
     if not osp.exists(BASE_DIR) or args.command == 'reset':
-        prepare(BASE_DIR, version=AP_VERSION, clean=True)
+        build(ANSIBLE_PORTABLE_VERSION)
     if args.command in COMMANDS:
-        process = run([osp.join(BIN, args.command)] + extra_args)
+        from subprocess import run
+
+        process = run([osp.join(BIN_DIR, args.command)] + extra_args)
         sys.exit(process.returncode)

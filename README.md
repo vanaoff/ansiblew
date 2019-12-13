@@ -19,5 +19,5 @@ optional arguments:
   --blew-help
 ```
 
-## Credits
+## Links
 https://github.com/ownport/portable-ansible
