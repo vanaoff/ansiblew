@@ -15,7 +15,7 @@ If the script is part of the repository, I recommend adding directory `.blew/` i
 
 ## Usage
 ```bash
-❯ blew --blew-help
+❯ ./blew --blew-help
 usage: blew [--log-level LOG_LEVEL] [--blew-help] {reset,config,connection,console,doc,galaxy,inventory,lint,playbook,pull,test,vault} ...
 
 positional arguments:
