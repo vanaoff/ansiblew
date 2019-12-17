@@ -23,13 +23,16 @@ URL_TEMPLATE = 'https://github.com/ownport/portable-ansible/releases/download/%(
 
 SCRIPT_DIR = osp.dirname(osp.realpath(sys.argv[0]))
 BASE_DIR = osp.join(SCRIPT_DIR, '.blew')
-ANSIBLE_DIR = osp.join(BASE_DIR, 'ansible')
-EXEC_DIR = osp.join(BASE_DIR, 'exec')
-BIN_DIR = osp.join(BASE_DIR, 'bin')
+ANSIBLE = 'ansible'
+ANSIBLE_DIR = osp.join(BASE_DIR, ANSIBLE)
+EXEC = 'exec'
+EXEC_DIR = osp.join(BASE_DIR, EXEC)
+BIN = 'bin'
+BIN_DIR = osp.join(BASE_DIR, BIN)
 
 SCRIPT_TEMPLATE = """\
 #!/usr/bin/env bash
-python3 $(dirname $0)/../exec/%(command)s $@
+python3 $(dirname $0)/../%(exec)s/%(command)s $@
 """
 
 COMMANDS = (
@@ -76,10 +79,10 @@ def build(ansible_portable_version):
     prepare_dir(EXEC_DIR)
     prepare_dir(BIN_DIR)
     for command in COMMANDS:
-        os.symlink('../ansible', osp.join(EXEC_DIR, command), True)
+        os.symlink(osp.join(osp.pardir, ANSIBLE), osp.join(EXEC_DIR, command), True)
         script = osp.join(BIN_DIR, command)
         with open(script, 'w') as w:
-            w.write(SCRIPT_TEMPLATE % {'command': command, 'ansible_exec': EXEC_DIR})
+            w.write(SCRIPT_TEMPLATE % {'command': command, 'exec': EXEC})
         os.chmod(script, 0o755)
 
 
