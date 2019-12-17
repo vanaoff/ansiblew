@@ -48,34 +48,21 @@ COMMANDS = (
 )
 
 
-def update_rec(default, custom, path=()):
-    merged = default.copy()
-    for key, value in default.items():
-        if key in custom:
-            custom_value = custom[key]
-            assert type(custom_value) == type(value)
-            if isinstance(value, dict):
-                merged[key] = update_rec(value, custom_value, path + key)
-            else:
-                merged[key] = custom_value
-    return merged
-
-
-def prepare_dir(path, reset=False):
-    if reset and osp.exists(path):
+def safe_remove_dir(path):
+    if osp.exists(path):
+        logger.debug('Removing %s.', path)
         shutil.rmtree(path)
-    logger.debug("Preparing dir %s.", path)
+    else:
+        logger.debug('%s does not exist.', path)
+
+
+def prepare_dir(path, force_empty=False):
     from pathlib import Path
+    if force_empty:
+        safe_remove_dir(path)
+    logger.debug("Preparing dir %s.", path)
     Path(path).mkdir(parents=True, exist_ok=True)
     return path
-
-
-def safe_remove_dir(dir):
-    if osp.exists(dir):
-        logger.debug('Removing %s.', dir)
-        shutil.rmtree(dir)
-    else:
-        logger.debug('%s does not exist.', dir)
 
 
 def build(ansible_portable_version):
